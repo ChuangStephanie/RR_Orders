@@ -5,6 +5,7 @@ const path = require("path");
 const ExcelJS = require("exceljs");
 const unzipper = require("unzipper");
 const app = express();
+const { PDFDocument } = require("pdf-lib");
 
 // upload path
 const upload = multer({ dest: path.join(__dirname, "db", "uploads") });
@@ -110,45 +111,67 @@ app.post(
 );
 
 // Move label files into model-specific subfolders
+async function mergePdfs(files) {
+  const mergedPdf = await PDFDocument.create();
+
+  for (const file of files) {
+    const pdfBytes = fs.readFileSync(file);
+    const pdf = await PDFDocument.load(pdfBytes);
+    const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+    copiedPages.forEach((page) => mergedPdf.addPage(page));
+  }
+
+  const mergedPdfBytes = await mergedPdf.save();
+  return mergedPdfBytes;
+}
+
 async function moveLabels(labels, extractPath, processedPath) {
-    for (const model in labels) {
-      // Create a folder for each model named after the model
-      const modelFolder = path.join(processedPath, model);
-      fs.mkdirSync(modelFolder, { recursive: true });
-  
-      // Find the files in the extracted folder that match the order numbers for this model
-      for (const orderNumber of labels[model]) {
-        console.log(`Looking for files for order number: ${orderNumber}`);
-  
-        // Extract all filenames from the folder
-        const extractedFiles = fs.readdirSync(extractPath);
-        console.log('Extracted files:', extractedFiles); // Log extracted files for debugging
-  
-        // Remove any extra spaces and check if the order number is a substring of the filename
-        const matchingFiles = extractedFiles.filter((file) =>
-          file
-            .toLowerCase()
-            .trim()
-            .includes(orderNumber.toLowerCase().trim())
-        );
-  
-        // Log matching files for debugging
-        console.log('Matching files:', matchingFiles);
-  
-        // Move the matching files to the model's folder
-        for (const file of matchingFiles) {
-          const sourcePath = path.join(extractPath, file);
-          const destinationPath = path.join(modelFolder, file);
-  
-          if (fs.existsSync(sourcePath)) {
-            console.log(`Moving file: ${file} to ${modelFolder}`);
-            fs.renameSync(sourcePath, destinationPath); // Move the file
-          }
+  for (const model in labels) {
+    const modelFiles = [];
+
+    // Find the files in the extracted folder that match the order numbers for this model
+    for (const orderNumber of labels[model]) {
+      console.log(`Looking for files for order number: ${orderNumber}`);
+
+      // Extract all filenames from the folder
+      const extractedFiles = fs.readdirSync(extractPath);
+      console.log("Extracted files:", extractedFiles); // Log extracted files for debugging
+
+      // Remove any extra spaces and check if the order number is a substring of the filename
+      const matchingFiles = extractedFiles.filter((file) =>
+        file.toLowerCase().trim().includes(orderNumber.toLowerCase().trim())
+      );
+
+      // Log matching files for debugging
+      console.log("Matching files:", matchingFiles);
+
+      // Add matching PDF files to the modelFiles array
+      matchingFiles.forEach((file) => {
+        const filePath = path.join(extractPath, file);
+        if (fs.existsSync(filePath)) {
+          modelFiles.push(filePath); // Add file to the model's list
         }
-      }
+      });
+    }
+
+    if (modelFiles.length > 0) {
+      console.log(`Merging PDF files for model: ${model}`);
+
+      // Merge all the PDF files
+      const mergedPdfBytes = await mergePdfs(modelFiles);
+
+      // Create the processed file path for the model
+      const outputFilePath = path.join(processedPath, `${model}.pdf`);
+      fs.writeFileSync(outputFilePath, mergedPdfBytes); // Save the merged PDF file
+
+
+      console.log(
+        `Processed file for model ${model} created: ${outputFilePath}`
+      );
     }
   }
-  
+}
+
 // Function to clear the uploads folder
 function clearUploadsFolder(folderPath) {
   try {
