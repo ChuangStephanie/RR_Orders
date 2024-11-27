@@ -54,14 +54,16 @@ app.post(
       }
 
       // Process data from sheet
-      const rows = sheet.getRows(2, sheet.rowCount); 
-      const labels = {}; 
+      const rows = sheet.getRows(2, sheet.rowCount);
+      const labels = {};
+      const allOrderNums = [];
 
       rows.forEach((row) => {
         const orderNumber = row.getCell(orderNumberColumnIndex).value;
         const modelName = row.getCell(modelColumnIndex).value;
 
         if (orderNumber && modelName) {
+          allOrderNums.push(orderNumber.toString().trim());
           if (!labels[modelName]) {
             labels[modelName] = [];
           }
@@ -71,13 +73,15 @@ app.post(
 
       // Process the zip file
       const zipFilePath = req.files.zip[0].path;
-      const extractPath = path.join(__dirname, "db", "uploads", "labels"); 
+      const extractPath = path.join(__dirname, "db", "uploads", "labels");
       fs.mkdirSync(extractPath, { recursive: true });
 
       // Extract zip
       const unzipStream = fs
         .createReadStream(zipFilePath)
         .pipe(unzipper.Extract({ path: extractPath }));
+
+      let foundOrderNums = new Set();
 
       unzipStream.on("close", async () => {
         const archive = archiver("zip", { zlib: { level: 9 } });
@@ -96,24 +100,37 @@ app.post(
           for (const orderNumber of labels[model]) {
             const extractedFiles = fs.readdirSync(extractPath);
             const matchingFiles = extractedFiles.filter((file) =>
-              file.toLowerCase().trim().includes(orderNumber.toLowerCase().trim())
+              file
+                .toLowerCase()
+                .trim()
+                .includes(orderNumber.toLowerCase().trim())
             );
 
             matchingFiles.forEach((file) => {
               const filePath = path.join(extractPath, file);
               if (fs.existsSync(filePath)) {
                 modelFiles.push(filePath);
+                foundOrderNums.add(orderNumber.toString().trim());
               }
             });
           }
 
           if (modelFiles.length > 0) {
             const mergedPdfBytes = await mergePdfs(modelFiles);
-            archive.append(Buffer.from(mergedPdfBytes), { name: `${model}.pdf` });
+            archive.append(Buffer.from(mergedPdfBytes), {
+              name: `${model}.pdf`,
+            });
           }
         }
 
         archive.finalize();
+
+        // Log missing order numbers
+        const missingOrderNumbers = allOrderNums.filter(
+          (orderNumber) => !foundOrderNums.has(orderNumber)
+        );
+
+        console.log("Missing Order Numbers:", missingOrderNumbers);
 
         // Clean up temporary files
         fs.unlinkSync(excelFilePath);
