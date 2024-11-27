@@ -10,11 +10,35 @@ const { PDFDocument } = require("pdf-lib");
 // upload path
 const upload = multer({ dest: path.join(__dirname, "db", "uploads") });
 
+function clearProcessedFolder(folderPath) {
+  try {
+    const files = fs.readdirSync(folderPath);
+    files.forEach((file) => {
+      const filePath = path.join(folderPath, file);
+      const stats = fs.statSync(filePath);
+
+      if (stats.isDirectory()) {
+        clearProcessedFolder(filePath); // Recursively clear subdirectories
+        fs.rmdirSync(filePath); // Remove directory
+      } else {
+        fs.unlinkSync(filePath); // Remove file
+      }
+    });
+    console.log("Processed folder cleared");
+  } catch (err) {
+    console.error("Error clearing processed folder:", err);
+  }
+}
+
 app.post(
   "/api/upload",
   upload.fields([{ name: "excel" }, { name: "zip" }]),
   async (req, res) => {
     try {
+      // Clear the processed folder before starting
+      const processedPath = path.join(__dirname, "db", "processed");
+      clearProcessedFolder(processedPath);
+
       // Read Excel file
       const excelFilePath = req.files.excel[0].path;
       const workbook = new ExcelJS.Workbook();
@@ -163,7 +187,6 @@ async function moveLabels(labels, extractPath, processedPath) {
       // Create the processed file path for the model
       const outputFilePath = path.join(processedPath, `${model}.pdf`);
       fs.writeFileSync(outputFilePath, mergedPdfBytes); // Save the merged PDF file
-
 
       console.log(
         `Processed file for model ${model} created: ${outputFilePath}`
