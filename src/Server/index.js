@@ -18,10 +18,10 @@ function clearProcessedFolder(folderPath) {
       const stats = fs.statSync(filePath);
 
       if (stats.isDirectory()) {
-        clearProcessedFolder(filePath); // Recursively clear subdirectories
-        fs.rmdirSync(filePath); // Remove directory
+        clearProcessedFolder(filePath); 
+        fs.rmdirSync(filePath); 
       } else {
-        fs.unlinkSync(filePath); // Remove file
+        fs.unlinkSync(filePath); 
       }
     });
     console.log("Processed folder cleared");
@@ -78,8 +78,8 @@ app.post(
       }
 
       // Process data from sheet
-      const rows = sheet.getRows(2, sheet.rowCount); // Skip the header row
-      const labels = {}; // Object to hold grouped labels by model
+      const rows = sheet.getRows(2, sheet.rowCount); 
+      const labels = {}; 
 
       // Group by model
       rows.forEach((row) => {
@@ -97,7 +97,7 @@ app.post(
 
       // Process the zip file
       const zipFilePath = req.files.zip[0].path;
-      const extractPath = path.join(__dirname, "db", "uploads", "labels"); // Extract path updated
+      const extractPath = path.join(__dirname, "db", "uploads", "labels"); 
       fs.mkdirSync(extractPath, { recursive: true });
 
       // Extract zip
@@ -105,9 +105,9 @@ app.post(
         .createReadStream(zipFilePath)
         .pipe(unzipper.Extract({ path: extractPath }));
       unzipStream.on("close", async () => {
-        // Path to save processed folders
+        
         const processedPath = path.join(__dirname, "db", "processed");
-        fs.mkdirSync(processedPath, { recursive: true }); // Ensure the processed folder exists
+        fs.mkdirSync(processedPath, { recursive: true }); 
 
         // Move label files to the correct subfolders based on model
         await moveLabels(labels, extractPath, processedPath);
