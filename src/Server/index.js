@@ -4,41 +4,18 @@ const fs = require("fs");
 const path = require("path");
 const ExcelJS = require("exceljs");
 const unzipper = require("unzipper");
+const archiver = require("archiver");
 const app = express();
 const { PDFDocument } = require("pdf-lib");
 
 // upload path
 const upload = multer({ dest: path.join(__dirname, "db", "uploads") });
 
-function clearProcessedFolder(folderPath) {
-  try {
-    const files = fs.readdirSync(folderPath);
-    files.forEach((file) => {
-      const filePath = path.join(folderPath, file);
-      const stats = fs.statSync(filePath);
-
-      if (stats.isDirectory()) {
-        clearProcessedFolder(filePath); 
-        fs.rmdirSync(filePath); 
-      } else {
-        fs.unlinkSync(filePath); 
-      }
-    });
-    console.log("Processed folder cleared");
-  } catch (err) {
-    console.error("Error clearing processed folder:", err);
-  }
-}
-
 app.post(
   "/api/upload",
   upload.fields([{ name: "excel" }, { name: "zip" }]),
   async (req, res) => {
     try {
-      // Clear the processed folder before starting
-      const processedPath = path.join(__dirname, "db", "processed");
-      clearProcessedFolder(processedPath);
-
       // Read Excel file
       const excelFilePath = req.files.excel[0].path;
       const workbook = new ExcelJS.Workbook();
@@ -58,7 +35,6 @@ app.post(
       let orderNumberColumnIndex = -1;
       let modelColumnIndex = -1;
 
-      // Find column index by header
       sheet.getRow(1).eachCell((cell, colNumber) => {
         const header = (cell.value || "").toString().toLowerCase();
 
@@ -81,7 +57,6 @@ app.post(
       const rows = sheet.getRows(2, sheet.rowCount); 
       const labels = {}; 
 
-      // Group by model
       rows.forEach((row) => {
         const orderNumber = row.getCell(orderNumberColumnIndex).value;
         const modelName = row.getCell(modelColumnIndex).value;
@@ -91,7 +66,6 @@ app.post(
             labels[modelName] = [];
           }
           labels[modelName].push(orderNumber);
-          console.log("order number:", orderNumber, "model name:", modelName);
         }
       });
 
@@ -104,26 +78,47 @@ app.post(
       const unzipStream = fs
         .createReadStream(zipFilePath)
         .pipe(unzipper.Extract({ path: extractPath }));
+
       unzipStream.on("close", async () => {
-        
-        const processedPath = path.join(__dirname, "db", "processed");
-        fs.mkdirSync(processedPath, { recursive: true }); 
+        const archive = archiver("zip", { zlib: { level: 9 } });
+        res.setHeader("Content-Type", "application/zip");
+        res.setHeader(
+          "Content-Disposition",
+          'attachment; filename="merged_pdfs.zip"'
+        );
 
-        // Move label files to the correct subfolders based on model
-        await moveLabels(labels, extractPath, processedPath);
+        archive.pipe(res);
 
-        // Clean up after file processing
+        // Move and process label files
+        for (const model in labels) {
+          const modelFiles = [];
+
+          for (const orderNumber of labels[model]) {
+            const extractedFiles = fs.readdirSync(extractPath);
+            const matchingFiles = extractedFiles.filter((file) =>
+              file.toLowerCase().trim().includes(orderNumber.toLowerCase().trim())
+            );
+
+            matchingFiles.forEach((file) => {
+              const filePath = path.join(extractPath, file);
+              if (fs.existsSync(filePath)) {
+                modelFiles.push(filePath);
+              }
+            });
+          }
+
+          if (modelFiles.length > 0) {
+            const mergedPdfBytes = await mergePdfs(modelFiles);
+            archive.append(Buffer.from(mergedPdfBytes), { name: `${model}.pdf` });
+          }
+        }
+
+        archive.finalize();
+
+        // Clean up temporary files
         fs.unlinkSync(excelFilePath);
         fs.unlinkSync(zipFilePath);
-
-        // Clear the uploads folder after processing
         clearUploadsFolder(path.join(__dirname, "db", "uploads"));
-
-        // Response
-        res.json({
-          message:
-            "Labels sorted and moved into grouped folders by model. Check the processed folder for the files.",
-        });
       });
     } catch (error) {
       console.error(error);
@@ -134,7 +129,6 @@ app.post(
   }
 );
 
-// Move label files into model-specific subfolders
 async function mergePdfs(files) {
   const mergedPdf = await PDFDocument.create();
 
@@ -145,57 +139,9 @@ async function mergePdfs(files) {
     copiedPages.forEach((page) => mergedPdf.addPage(page));
   }
 
-  const mergedPdfBytes = await mergedPdf.save();
-  return mergedPdfBytes;
+  return await mergedPdf.save();
 }
 
-async function moveLabels(labels, extractPath, processedPath) {
-  for (const model in labels) {
-    const modelFiles = [];
-
-    // Find the files in the extracted folder that match the order numbers for this model
-    for (const orderNumber of labels[model]) {
-      console.log(`Looking for files for order number: ${orderNumber}`);
-
-      // Extract all filenames from the folder
-      const extractedFiles = fs.readdirSync(extractPath);
-      console.log("Extracted files:", extractedFiles); // Log extracted files for debugging
-
-      // Remove any extra spaces and check if the order number is a substring of the filename
-      const matchingFiles = extractedFiles.filter((file) =>
-        file.toLowerCase().trim().includes(orderNumber.toLowerCase().trim())
-      );
-
-      // Log matching files for debugging
-      console.log("Matching files:", matchingFiles);
-
-      // Add matching PDF files to the modelFiles array
-      matchingFiles.forEach((file) => {
-        const filePath = path.join(extractPath, file);
-        if (fs.existsSync(filePath)) {
-          modelFiles.push(filePath); // Add file to the model's list
-        }
-      });
-    }
-
-    if (modelFiles.length > 0) {
-      console.log(`Merging PDF files for model: ${model}`);
-
-      // Merge all the PDF files
-      const mergedPdfBytes = await mergePdfs(modelFiles);
-
-      // Create the processed file path for the model
-      const outputFilePath = path.join(processedPath, `${model}.pdf`);
-      fs.writeFileSync(outputFilePath, mergedPdfBytes); // Save the merged PDF file
-
-      console.log(
-        `Processed file for model ${model} created: ${outputFilePath}`
-      );
-    }
-  }
-}
-
-// Function to clear the uploads folder
 function clearUploadsFolder(folderPath) {
   try {
     const files = fs.readdirSync(folderPath);
@@ -204,13 +150,12 @@ function clearUploadsFolder(folderPath) {
       const stats = fs.statSync(filePath);
 
       if (stats.isDirectory()) {
-        clearUploadsFolder(filePath); // Recursively clear subdirectories
-        fs.rmdirSync(filePath); // Remove directory
+        clearUploadsFolder(filePath);
+        fs.rmdirSync(filePath);
       } else {
-        fs.unlinkSync(filePath); // Remove file
+        fs.unlinkSync(filePath);
       }
     });
-    console.log("Uploads folder cleared");
   } catch (err) {
     console.error("Error clearing uploads folder:", err);
   }
