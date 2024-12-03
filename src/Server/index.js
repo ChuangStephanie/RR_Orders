@@ -101,6 +101,7 @@ app.post(
         .pipe(unzipper.Extract({ path: extractPath }));
 
       let foundOrderNums = new Set();
+      let extraOrderNums = new Set();
 
       unzipStream.on("close", async () => {
         const archive = archiver("zip", { zlib: { level: 9 } });
@@ -125,7 +126,7 @@ app.post(
                   .includes(orderNumber.toString().trim())
               );
 
-              console.log("matching:", matchingFiles);
+              // console.log("matching:", matchingFiles);
 
               matchingFiles.forEach((file) => {
                 const filePath = path.join(extractPath, file);
@@ -134,13 +135,25 @@ app.post(
                   foundOrderNums.add(orderNumber.toString().trim());
                 }
               });
+
+              extractedFiles.forEach((file) => {
+                const extractedOrderNum = file.toLowerCase().trim();
+
+                if (
+                  !allOrderNums.some((order) =>
+                    extractedOrderNum.includes(order.toLowerCase().trim())
+                  )
+                ) {
+                  extraOrderNums.add(extractedOrderNum);
+                }
+              });
             }
 
             if (modelFiles.length > 0) {
               const mergedPdfBytes = await mergePdfs(modelFiles);
               archive.append(Buffer.from(mergedPdfBytes), {
-                name: `${groupName}_${model}.pdf`
-              })
+                name: `${groupName}_${model}.pdf`,
+              });
             }
           }
         }
@@ -156,6 +169,10 @@ app.post(
         );
 
         console.log("Missing Order Numbers:", missingOrderNumbers);
+        console.log(
+          "Extra order numbers in zip (not in sheet):",
+          extraOrderNums
+        );
 
         // Clean up temporary files
         fs.unlinkSync(excelFilePath);
