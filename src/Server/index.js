@@ -103,8 +103,10 @@ app.post(
               file
                 .toLowerCase()
                 .trim()
-                .includes(orderNumber.toLowerCase().trim())
+                .includes(orderNumber.toString().toLowerCase().trim())
             );
+
+            console.log(matchingFiles);
 
             matchingFiles.forEach((file) => {
               const filePath = path.join(extractPath, file);
