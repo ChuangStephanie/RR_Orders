@@ -7,6 +7,8 @@ const unzipper = require("unzipper");
 const archiver = require("archiver");
 const app = express();
 const { PDFDocument } = require("pdf-lib");
+const { group } = require("console");
+const { arch, platform } = require("os");
 
 // upload path
 const upload = multer({ dest: path.join(__dirname, "db", "uploads") });
@@ -56,26 +58,35 @@ app.post(
         platformColIndex === -1
       ) {
         return res.status(400).json({
-          message:
-            'Could not find required columns in the sheet.',
+          message: "Could not find required columns in the sheet.",
         });
       }
 
       // Process data from sheet
       const rows = sheet.getRows(2, sheet.rowCount);
-      const labels = {};
+      const groups = {
+        amazon: {},
+        others: {},
+      };
       const allOrderNums = [];
 
       rows.forEach((row) => {
         const orderNumber = row.getCell(orderNumberColumnIndex).value;
         const modelName = row.getCell(modelColumnIndex).value;
+        const platformName = row.getCell(platformColIndex).value;
 
         if (orderNumber && modelName) {
           allOrderNums.push(orderNumber.toString().trim());
-          if (!labels[modelName]) {
-            labels[modelName] = [];
+          const platform =
+            platformName &&
+            platformName.toString().toLowerCase().includes("amazon")
+              ? groups.amazon
+              : groups.others;
+
+          if (!platform[modelName]) {
+            platform[modelName] = [];
           }
-          labels[modelName].push(orderNumber);
+          platform[modelName].push(orderNumber);
         }
       });
 
@@ -101,37 +112,41 @@ app.post(
 
         archive.pipe(res);
 
-        // Move and process label files
-        for (const model in labels) {
-          const modelFiles = [];
+        async function processGroup(group, groupName) {
+          for (const model in group) {
+            const modelFiles = [];
 
-          for (const orderNumber of labels[model]) {
-            const extractedFiles = fs.readdirSync(extractPath);
-            const matchingFiles = extractedFiles.filter((file) =>
-              file
-                .toLowerCase()
-                .trim()
-                .includes(orderNumber.toString().toLowerCase().trim())
-            );
+            for (const orderNumber of group[model]) {
+              const extractedFiles = fs.readdirSync(extractPath);
+              const matchingFiles = extractedFiles.filter((file) =>
+                file
+                  .toLowerCase()
+                  .trim()
+                  .includes(orderNumber.toString().trim())
+              );
 
-            console.log(matchingFiles);
+              console.log("matching:", matchingFiles);
 
-            matchingFiles.forEach((file) => {
-              const filePath = path.join(extractPath, file);
-              if (fs.existsSync(filePath)) {
-                modelFiles.push(filePath);
-                foundOrderNums.add(orderNumber.toString().trim());
-              }
-            });
-          }
+              matchingFiles.forEach((file) => {
+                const filePath = path.join(extractPath, file);
+                if (fs.existsSync(filePath)) {
+                  modelFiles.push(filePath);
+                  foundOrderNums.add(orderNumber.toString().trim());
+                }
+              });
+            }
 
-          if (modelFiles.length > 0) {
-            const mergedPdfBytes = await mergePdfs(modelFiles);
-            archive.append(Buffer.from(mergedPdfBytes), {
-              name: `${model}.pdf`,
-            });
+            if (modelFiles.length > 0) {
+              const mergedPdfBytes = await mergePdfs(modelFiles);
+              archive.append(Buffer.from(mergedPdfBytes), {
+                name: `${groupName}_${model}.pdf`
+              })
+            }
           }
         }
+
+        await processGroup(groups.amazon, "amazon");
+        await processGroup(groups.others, "others");
 
         archive.finalize();
 
