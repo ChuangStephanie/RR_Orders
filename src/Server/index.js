@@ -34,6 +34,7 @@ app.post(
       // Find columns by name
       let orderNumberColumnIndex = -1;
       let modelColumnIndex = -1;
+      let platformColIndex = -1;
 
       sheet.getRow(1).eachCell((cell, colNumber) => {
         const header = (cell.value || "").toString().toLowerCase();
@@ -44,12 +45,19 @@ app.post(
         if (header.includes("suitable model")) {
           modelColumnIndex = colNumber;
         }
+        if (header.includes("selling platform")) {
+          platformColIndex = colNumber;
+        }
       });
 
-      if (orderNumberColumnIndex === -1 || modelColumnIndex === -1) {
+      if (
+        orderNumberColumnIndex === -1 ||
+        modelColumnIndex === -1 ||
+        platformColIndex === -1
+      ) {
         return res.status(400).json({
           message:
-            'Could not find required columns: "Platform Order Number" or "Suitable Model" in the sheet.',
+            'Could not find required columns in the sheet.',
         });
       }
 
