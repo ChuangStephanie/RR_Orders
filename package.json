@@ -10,6 +10,7 @@
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "lint": "echo \"No linting configured\"",
+    "build": "vite build",
     "dev": "vite",
     "server": "nodemon ./src/server/index.js"
   },
