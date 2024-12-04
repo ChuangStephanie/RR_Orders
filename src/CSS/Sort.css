@@ -1,0 +1,28 @@
+.sort-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.title {
+    margin: 20px;
+}
+
+.uploads {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+p {
+    margin-top: 0px;
+}
+
+.text-box {
+    text-align: center;
+}
+
+.excel, .zip, .submit {
+    width: 200px;
+}

@@ -1,4 +1,5 @@
 const express = require("express");
+const cors = require("cors");
 const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
@@ -7,11 +8,11 @@ const unzipper = require("unzipper");
 const archiver = require("archiver");
 const app = express();
 const { PDFDocument } = require("pdf-lib");
-const { group } = require("console");
-const { arch, platform } = require("os");
 
 // upload path
 const upload = multer({ dest: path.join(__dirname, "db", "uploads") });
+
+app.use(cors());
 
 app.post(
   "/api/upload",
