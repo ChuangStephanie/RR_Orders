@@ -12,7 +12,10 @@ const { PDFDocument } = require("pdf-lib");
 // upload path
 const upload = multer({ dest: path.join(__dirname, "db", "uploads") });
 
+const PORT = 3000;
+
 app.use(cors());
+
 
 app.post(
   "/api/upload",
@@ -221,6 +224,8 @@ function clearUploadsFolder(folderPath) {
   }
 }
 
-app.listen(3000, () => {
-  console.log("Server running on http://localhost:3000");
+const server = app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
 });
+
+module.exports = server;
