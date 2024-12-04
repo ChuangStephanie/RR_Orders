@@ -20,14 +20,41 @@ export default function Sort() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleFileChange = (e) => {};
-
-  const handleSubmit = (e) => {};
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (e.target.name === "excel") {
+      setFile(file);
+      console.log("Excel uploaded:", file);
+    } else if (e.target.name === "zip") {
+      setZip(file);
+      console.log("Zip uploaded:", file);
+    }
+  };
 
   const handleNameChange = (e) => {
     const value = e.target.value;
     setName(value);
     console.log(value);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!file || !zip || !name) {
+      setError("Please upload all required files and/or sheet name.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await sortShippingLabels(file, zip, name);
+    } catch (error) {
+      console.error("Error sorting labels:", error);
+      setError("Failed to sort labels.");
+    } finally {
+      console.log("Labels Sorted!");
+      setLoading(false);
+    }
   };
 
   return (
@@ -42,17 +69,31 @@ export default function Sort() {
           startIcon={<CloudUploadRounded />}
         >
           Upload Excel
+          <input
+            type="file"
+            name="excel"
+            hidden
+            onChange={handleFileChange}
+            accept=".xlsx"
+          />
         </Button>
         <Button
-          className="excel"
+          className="zip"
           component="label"
           variant="contained"
           startIcon={<CloudUploadRounded />}
         >
           Upload Zip
+          <input
+            type="file"
+            name="zip"
+            hidden
+            onChange={handleFileChange}
+            accept=".zip"
+          />
         </Button>
         <Box className="text-box">
-            <p>Enter name of sheet for reference (ex: Machine)</p>
+          <p>Enter name of sheet to reference (ex: Machine)</p>
           <TextField
             className="sheetname"
             label="Sheet Name"
@@ -80,6 +121,25 @@ export default function Sort() {
             }}
           ></TextField>
         </Box>
+        <Button
+          className="submit"
+          variant="contained"
+          onClick={handleSubmit}
+          disabled={loading}
+          sx={{
+            "&.Mui-disabled": {
+              backgroundColor: "gray",
+              color: "white",
+            },
+          }}
+        >
+          {loading ? (
+            <CircularProgress size={24} sx={{ color: "white" }} />
+          ) : (
+            "Sort Labels"
+          )}
+        </Button>
+        {error && <p style={{ color: "red" }}>{error}</p>}
       </Box>
     </Box>
   );

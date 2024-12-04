@@ -11,9 +11,18 @@
 .uploads {
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    align-items: center;
+    gap: 20px;
+}
+
+p {
+    margin-top: 0px;
 }
 
 .text-box {
     text-align: center;
+}
+
+.excel, .zip, .submit {
+    width: 200px;
 }
