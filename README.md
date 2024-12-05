@@ -13,3 +13,7 @@ Instructions:
 4. Upload .xlsx, .zip, and enter name of sheet to reference (CASE SENSITIVE)
     - App is not compatible with .xls so you will have to convert it to .xlsx if that's the case
 5. Click submit. After processing, it will give you the option to save the sorted labels. The terminal will list out the number of labels that weren't found in the sheet as well as the names.
+6. When you're finished with the app, close the server in terminal by hitting Ctrl+C and Enter
+
+# Current Issues
+There may be some duplicated labels in the final sorting
