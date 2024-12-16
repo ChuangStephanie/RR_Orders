@@ -7,10 +7,12 @@ const ExcelJS = require("exceljs");
 const unzipper = require("unzipper");
 const archiver = require("archiver");
 const app = express();
-const { PDFDocument } = require("pdf-lib");
+const { PDFDocument, sum } = require("pdf-lib");
 
 // upload path
 const upload = multer({ dest: path.join(__dirname, "db", "uploads") });
+
+const PORT = 3000;
 
 app.use(cors());
 
@@ -117,6 +119,9 @@ app.post(
         async function processGroup(group, groupName) {
           for (const model in group) {
             const modelFiles = [];
+            const labelCount = group[model].length;
+            const currentDate = new Date().toLocaleDateString();
+            console.log("Qty:", labelCount, "Date:", currentDate);
 
             for (const orderNumber of group[model]) {
               const extractedFiles = fs.readdirSync(extractPath);
@@ -151,12 +156,54 @@ app.post(
             }
 
             if (modelFiles.length > 0) {
+              const sumFilePath = await genSumPage(groupName, model, labelCount, currentDate);
+              modelFiles.unshift(sumFilePath);
+
               const mergedPdfBytes = await mergePdfs(modelFiles);
               archive.append(Buffer.from(mergedPdfBytes), {
                 name: `${groupName}_${model}.pdf`,
               });
             }
           }
+        }
+
+        async function genSumPage(group, model, labelCount, date) {
+          const pdfDoc = await PDFDocument.create();
+          const page = pdfDoc.addPage([384, 480]);
+
+          const fontSize = 20;
+          page.drawText(`Group: ${group}`, {
+            x: 50,
+            y: 420,
+            size: fontSize,
+          });
+          page.drawText(`Model: ${model}`, {
+            x: 50,
+            y: 380,
+            size: fontSize,
+          });
+          page.drawText(`Labels: ${labelCount}`, {
+            x: 50,
+            y: 340,
+            size: fontSize,
+          });
+          page.drawText(`Date: ${date}`, {
+            x: 50,
+            y: 300,
+            size: fontSize,
+          });
+
+          const pdfBytes = await pdfDoc.save();
+
+          const sumFilePath = path.join(
+            __dirname,
+            "db",
+            "uploads",
+            `${model}_summary.pdf`
+          );
+          fs.writeFileSync(sumFilePath, pdfBytes);
+
+          return sumFilePath;
         }
 
         await processGroup(groups.amazon, "amazon");
@@ -221,6 +268,8 @@ function clearUploadsFolder(folderPath) {
   }
 }
 
-app.listen(3000, () => {
-  console.log("Server running on http://localhost:3000");
+const server = app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
 });
+
+module.exports = server;
