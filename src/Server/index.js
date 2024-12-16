@@ -156,7 +156,7 @@ app.post(
             }
 
             if (modelFiles.length > 0) {
-              const sumFilePath = await genSumPage(model, labelCount, currentDate);
+              const sumFilePath = await genSumPage(groupName, model, labelCount, currentDate);
               modelFiles.unshift(sumFilePath);
 
               const mergedPdfBytes = await mergePdfs(modelFiles);
@@ -167,24 +167,29 @@ app.post(
           }
         }
 
-        async function genSumPage(model, labelCount, date) {
+        async function genSumPage(group, model, labelCount, date) {
           const pdfDoc = await PDFDocument.create();
-          const page = pdfDoc.addPage([600, 400]);
+          const page = pdfDoc.addPage([384, 480]);
 
           const fontSize = 20;
+          page.drawText(`Group: ${group}`, {
+            x: 50,
+            y: 420,
+            size: fontSize,
+          });
           page.drawText(`Model: ${model}`, {
             x: 50,
-            y: 300,
+            y: 380,
             size: fontSize,
           });
           page.drawText(`Labels: ${labelCount}`, {
             x: 50,
-            y: 260,
+            y: 340,
             size: fontSize,
           });
           page.drawText(`Date: ${date}`, {
             x: 50,
-            y: 220,
+            y: 300,
             size: fontSize,
           });
 
