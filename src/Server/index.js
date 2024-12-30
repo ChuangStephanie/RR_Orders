@@ -7,7 +7,7 @@ const ExcelJS = require("exceljs");
 const unzipper = require("unzipper");
 const archiver = require("archiver");
 const app = express();
-const { PDFDocument, sum } = require("pdf-lib");
+const { PDFDocument, degrees } = require("pdf-lib");
 
 // upload path
 const upload = multer({ dest: path.join(__dirname, "db", "uploads") });
@@ -125,22 +125,49 @@ app.post(
 
             for (const orderNumber of group[model]) {
               const extractedFiles = fs.readdirSync(extractPath);
+
               const matchingFiles = extractedFiles.filter((file) =>
                 file
                   .toLowerCase()
                   .trim()
-                  .includes(orderNumber.toString().trim())
+                  .includes(orderNumber.toString().toLowerCase().trim())
               );
 
-              // console.log("matching:", matchingFiles);
+              let bestMatch = null;
+              if (matchingFiles.length > 0) {
+                bestMatch = matchingFiles.reduce((shortest, file) => {
+                  return file.length < shortest.length ? file : shortest;
+                });
+              }
 
-              matchingFiles.forEach((file) => {
-                const filePath = path.join(extractPath, file);
+              if (bestMatch) {
+                const prioritizedMatch = matchingFiles.find((file) => {
+                  file
+                    .toLowerCase()
+                    .startsWith(orderNumber.toString().toLowerCase());
+                });
+                if (prioritizedMatch) {
+                  bestMatch = prioritizedMatch;
+                }
+              }
+
+              if (bestMatch) {
+                const delimiterPattern = new RegExp(`\\b${orderNumber}[-_\\s]`);
+                const delimiterMatch = matchingFiles.find((file) => {
+                  delimiterPattern.test(file.toLowerCase());
+                });
+                if (delimiterMatch) {
+                  bestMatch = delimiterMatch;
+                }
+              }
+
+              if (bestMatch) {
+                const filePath = path.join(extractPath, bestMatch);
                 if (fs.existsSync(filePath)) {
                   modelFiles.push(filePath);
                   foundOrderNums.add(orderNumber.toString().trim());
                 }
-              });
+              }
 
               extractedFiles.forEach((file) => {
                 const extractedOrderNum = file.toLowerCase().trim();
@@ -156,7 +183,12 @@ app.post(
             }
 
             if (modelFiles.length > 0) {
-              const sumFilePath = await genSumPage(groupName, model, labelCount, currentDate);
+              const sumFilePath = await genSumPage(
+                groupName,
+                model,
+                labelCount,
+                currentDate
+              );
               modelFiles.unshift(sumFilePath);
 
               const mergedPdfBytes = await mergePdfs(modelFiles);
@@ -193,6 +225,8 @@ app.post(
             size: fontSize,
           });
 
+          page.setRotation(degrees(-90));
+
           const pdfBytes = await pdfDoc.save();
 
           const sumFilePath = path.join(
@@ -212,11 +246,14 @@ app.post(
         archive.finalize();
 
         // Log missing order numbers
-        const missingOrderNumbers = allOrderNums.filter(
-          (orderNumber) => !foundOrderNums.has(orderNumber)
+        const missingOrderNumbers = new Set(
+          allOrderNums.filter((orderNumber) => !foundOrderNums.has(orderNumber))
         );
 
-        console.log("Order numbers missing labels (labels not in zip) :", missingOrderNumbers);
+        console.log(
+          "Order numbers missing labels (labels not in zip) :",
+          missingOrderNumbers
+        );
         console.log(
           "Extra labels in zip (order number not found in sheet):",
           extraOrderNums
