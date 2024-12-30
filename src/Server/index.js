@@ -216,9 +216,9 @@ app.post(
           (orderNumber) => !foundOrderNums.has(orderNumber)
         );
 
-        console.log("Missing Order Numbers:", missingOrderNumbers);
+        console.log("Order numbers missing labels (labels not in zip) :", missingOrderNumbers);
         console.log(
-          "Extra order numbers in zip (not in sheet):",
+          "Extra labels in zip (order number not found in sheet):",
           extraOrderNums
         );
 
